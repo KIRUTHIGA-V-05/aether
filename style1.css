@@ -1,0 +1,17 @@
+body {
+    background: radial-gradient(circle at top, #1f1147, #0b061f);
+    color: #eaeaff;
+}
+
+.topbar { background: rgba(20,10,50,0.85); }
+
+.panel { background: rgba(40,20,90,0.7); }
+
+.board-surface {
+    background: linear-gradient(160deg, #020617, #140c38);
+}
+
+.switch-bar button,
+.command-bar button {
+    background: linear-gradient(135deg, #7c3aed, #6366f1);
+}

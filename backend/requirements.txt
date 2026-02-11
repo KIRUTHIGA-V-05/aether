@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+sentence-transformers
+numpy
+torch
+openai-whisper
+librosa
+sounddevice

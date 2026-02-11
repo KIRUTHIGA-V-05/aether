@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aether Smart Assistive Teaching System</title>
+    <style>
+        body { font-family: sans-serif; display: flex; height: 100vh; margin: 0; background: #f0f0f0; }
+        #sidebar { width: 300px; background: #2c3e50; color: white; padding: 20px; display: flex; flex-direction: column; }
+        #main-content { flex-grow: 1; display: flex; flex-direction: column; padding: 20px; position: relative; }
+        #board-container { flex-grow: 1; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); position: relative; overflow: hidden; }
+        canvas { width: 100%; height: 100%; }
+        #ppt-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #fff; display: none; align-items: center; justify-content: center; font-size: 2em; }
+        #controls { height: 100px; display: flex; align-items: center; gap: 10px; }
+        input { flex-grow: 1; padding: 15px; border-radius: 5px; border: 1px solid #ccc; font-size: 1.1em; }
+        button { padding: 15px 25px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 5px; }
+        .notice-item { background: #34495e; padding: 10px; margin-bottom: 10px; border-left: 4px solid #f1c40f; border-radius: 3px; }
+        #console { height: 150px; background: #000; color: #0f0; font-family: monospace; padding: 10px; overflow-y: auto; font-size: 0.8em; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>Notice Board</h2>
+    <div id="notice-list"></div>
+    <div style="margin-top: auto;">
+        <h3>Aether Status</h3>
+        <p id="system-mode">Mode: BOARD</p>
+    </div>
+</div>
+
+<div id="main-content">
+    <div id="board-container">
+        <canvas id="smartBoard"></canvas>
+        <div id="ppt-overlay">PPT MODE: SLIDE <span id="slide-num">1</span></div>
+    </div>
+    
+    <div id="console">Aether System Initialized... Ready for instructions.</div>
+
+    <div id="controls">
+    <input type="text" id="commandInput" placeholder="Speak or type command...">
+    <button onclick="startListening()">🎤 Speak</button>
+    <button onclick="sendCommand()">Execute</button>
+</div>
+<script src="voice_handler.js"></script>
+</div>
+
+<script>
+    const canvas = document.getElementById('smartBoard');
+    const ctx = canvas.getContext('2d');
+    const consoleDiv = document.getElementById('console');
+    const pptOverlay = document.getElementById('ppt-overlay');
+    
+    function resizeCanvas() {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    async function sendCommand() {
+        const input = document.getElementById('commandInput');
+        const text = input.value;
+        if (!text) return;
+
+        logToConsole(`User: ${text}`);
+        
+        try {
+            const response = await fetch('http://localhost:8000/process-command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    faculty_id: "PROF_ALPHA",
+                    mode: pptOverlay.style.display === 'flex' ? "PPT" : "BOARD"
+                })
+            });
+
+            const data = await response.json();
+            handleAetherResponse(data);
+            input.value = '';
+        } catch (error) {
+            logToConsole("Error connecting to Backend!");
+        }
+    }
+
+    function handleAetherResponse(data) {
+        logToConsole(`Aether: Intent detected - ${data.intent}`);
+        
+        if (data.notice_board_action) {
+            updateNoticeBoard(data.notice_board_action.content);
+        }
+
+        const payload = data.board_action;
+        
+        if (payload.action === "CANVAS_TEXT") {
+            drawText(payload.data.text);
+        } else if (payload.action === "SLIDE_CONTROL") {
+            togglePPT(true, payload.data.slide_number);
+        } else if (payload.action === "STEP_BY_STEP") {
+            renderSolution(payload.data.steps);
+        }
+    }
+
+    function drawText(text) {
+        togglePPT(false);
+        ctx.font = "24px Arial";
+        ctx.fillStyle = "black";
+        ctx.fillText(text, 50, 100 + (Math.random() * 300));
+    }
+
+    function renderSolution(steps) {
+        togglePPT(false);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.font = "bold 20px Arial";
+        ctx.fillText("Solution Steps:", 50, 50);
+        ctx.font = "18px Arial";
+        steps.forEach((s, i) => {
+            ctx.fillText(`${s.step}. ${s.content}`, 70, 100 + (i * 40));
+        });
+    }
+
+    function togglePPT(show, slide = 1) {
+        pptOverlay.style.display = show ? 'flex' : 'none';
+        document.getElementById('slide-num').innerText = slide;
+        document.getElementById('system-mode').innerText = `Mode: ${show ? 'PPT' : 'BOARD'}`;
+    }
+
+    function updateNoticeBoard(content) {
+        const list = document.getElementById('notice-list');
+        const div = document.createElement('div');
+        div.className = 'notice-item';
+        div.innerText = content;
+        list.prepend(div);
+    }
+
+    function logToConsole(msg) {
+        const p = document.createElement('p');
+        p.innerText = `> ${msg}`;
+        consoleDiv.appendChild(p);
+        consoleDiv.scrollTop = consoleDiv.scrollHeight;
+    }
+</script>
+
+</body>
+</html>
