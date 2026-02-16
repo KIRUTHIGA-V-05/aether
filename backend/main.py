@@ -1,54 +1,72 @@
-from fastapi import FastAPI, UploadFile, File, Body
-from pydantic import BaseModel
-from ai_engine import ai_engine
-from action_planner import planner
-from intent_config import get_config
-from knowledge_retriever import retriever
+import json
+import whisper
 import os
+import asyncio
+from fastapi import FastAPI, WebSocket, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from ppt_generator import generate_ppt_file
 
 app = FastAPI()
 
-config = get_config()
-ai_engine.set_intent_knowledge(config["intents"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-class CommandRequest(BaseModel):
-    text: str
-    faculty_id: str
+model = whisper.load_model("base")
+session_history = []
 
-@app.post("/process-voice")
-async def process_voice(file: UploadFile = File(...), faculty_id: str = Body(...)):
-    temp_path = f"temp_{file.filename}"
-    with open(temp_path, "wb") as buffer:
-        buffer.write(await file.read())
-    
-    transcript = ai_engine.transcribe_audio(temp_path)
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            await connection.send_text(json.dumps(message))
+
+manager = ConnectionManager()
+
+@app.websocket("/ws/{faculty_id}")
+async def websocket_endpoint(websocket: WebSocket, faculty_id: str):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except:
+        manager.active_connections.remove(websocket)
+
+@app.post("/process_voice/{faculty_id}")
+async def process_voice(faculty_id: str, file: UploadFile = File(...)):
+    temp_path = f"temp_{faculty_id}.wav"
+    with open(temp_path, "wb") as f:
+        f.write(await file.read())
+
+    result = model.transcribe(temp_path)
+    text = result["text"].lower().strip()
     os.remove(temp_path)
+
+    response_data = {"type": "BOARD_UPDATE", "content": text, "action": "none"}
+
+    if "table" in text:
+        response_data["action"] = "DRAW_TABLE"
+        response_data["content"] = "Aether: Drawing physical table..."
+    elif "next" in text:
+        response_data["action"] = "NEXT_SLIDE"
+    elif "highlight" in text:
+        response_data["action"] = "HIGHLIGHT"
+        response_data["content"] = text.replace("highlight", "").strip()
     
-    execution_plan = planner.plan_execution(transcript, faculty_id)
-    
-    return {
-        "raw_transcript": transcript,
-        "analysis": execution_plan
-    }
+    session_history.append({"intent": response_data["action"], "text": text})
+    await manager.broadcast(response_data)
+    return {"transcript": text}
 
-@app.post("/process-text")
-async def process_text(request: CommandRequest):
-    execution_plan = planner.plan_execution(request.text, request.faculty_id)
-    return execution_plan
-
-@app.post("/ingest-research-data")
-async def ingest_data(content: str = Body(..., embed=True)):
-    retriever.ingest_text(content)
-    return {"status": "Knowledge Base Updated", "segments": len(retriever.corpus_segments)}
-
-@app.get("/system-health")
-async def health():
-    return {
-        "device": ai_engine.device,
-        "cuda_active": torch.cuda.is_available(),
-        "memory_allocated": f"{torch.cuda.memory_allocated(0)/1024**2:.2f}MB" if torch.cuda.is_available() else "N/A"
-    }
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+@app.get("/generate_summary/{faculty_id}")
+async def generate_summary(faculty_id: str):
+    file_path = generate_ppt_file(session_history)
+    return {"status": "Success", "file_url": file_path}
