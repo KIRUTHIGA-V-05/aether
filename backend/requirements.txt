@@ -7,3 +7,6 @@ torch
 openai-whisper
 librosa
 sounddevice
+python-multipart
+python-pptx
+websockets
