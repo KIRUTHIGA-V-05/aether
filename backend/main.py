@@ -80,4 +80,4 @@ async def process_voice(faculty_id: str, file: UploadFile = File(...)):
 @app.get("/generate_summary/{faculty_id}")
 async def generate_summary(faculty_id: str):
     file_path = generate_ppt_file(session_history)
-    return {"status": "Success", "file_url": file_path}s
+    return {"status": "Success", "file_url": file_path}
