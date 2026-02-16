@@ -2,10 +2,12 @@ import json
 import whisper
 import os
 import asyncio
+import torch
 from fastapi import FastAPI, WebSocket, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from sentence_transformers import SentenceTransformer, util
 from ppt_generator import generate_ppt_file
-from hardware_bridge import get_table_gcode
+from hardware_bridge import get_table_gcode, get_highlight_gcode
 
 app = FastAPI()
 
@@ -17,7 +19,14 @@ app.add_middleware(
 )
 
 model = whisper.load_model("base")
+embedder = SentenceTransformer('all-MiniLM-L6-v2')
 session_history = []
+
+intents = {
+    "DRAW_TABLE": ["draw a table", "create a grid", "make a table"],
+    "NEXT_SLIDE": ["next slide", "move forward"],
+    "HIGHLIGHT": ["highlight this", "underline this"]
+}
 
 class ConnectionManager:
     def __init__(self):
@@ -56,26 +65,31 @@ async def process_voice(faculty_id: str, file: UploadFile = File(...)):
     text = result["text"].lower().strip()
     os.remove(temp_path)
 
+    text_embedding = embedder.encode(text, convert_to_tensor=True)
+    detected_action = "none"
+    
+    for intent, phrases in intents.items():
+        phrase_embeddings = embedder.encode(phrases, convert_to_tensor=True)
+        hits = util.cos_sim(text_embedding, phrase_embeddings)
+        if torch.max(hits) > 0.6:
+            detected_action = intent
+            break
+
     response_data = {
         "type": "BOARD_UPDATE", 
         "content": text, 
-        "action": "none",
+        "action": detected_action,
         "gcode": []
     }
 
-    if "table" in text:
-        response_data["action"] = "DRAW_TABLE"
-        response_data["content"] = "Aether: Drawing physical table..."
+    if detected_action == "DRAW_TABLE":
         response_data["gcode"] = get_table_gcode()
-    elif "next" in text:
-        response_data["action"] = "NEXT_SLIDE"
-    elif "highlight" in text:
-        response_data["action"] = "HIGHLIGHT"
-        response_data["content"] = text.replace("highlight", "").strip()
+    elif detected_action == "HIGHLIGHT":
+        response_data["gcode"] = get_highlight_gcode()
     
-    session_history.append({"intent": response_data["action"], "text": text})
+    session_history.append({"intent": detected_action, "text": text})
     await manager.broadcast(response_data)
-    return {"transcript": text}
+    return {"transcript": text, "action": detected_action}
 
 @app.get("/generate_summary/{faculty_id}")
 async def generate_summary(faculty_id: str):
