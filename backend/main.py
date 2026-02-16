@@ -5,6 +5,7 @@ import asyncio
 from fastapi import FastAPI, WebSocket, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from ppt_generator import generate_ppt_file
+from hardware_bridge import get_table_gcode
 
 app = FastAPI()
 
@@ -26,6 +27,10 @@ class ConnectionManager:
         await websocket.accept()
         self.active_connections.append(websocket)
 
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
     async def broadcast(self, message: dict):
         for connection in self.active_connections:
             await connection.send_text(json.dumps(message))
@@ -39,7 +44,7 @@ async def websocket_endpoint(websocket: WebSocket, faculty_id: str):
         while True:
             await websocket.receive_text()
     except:
-        manager.active_connections.remove(websocket)
+        manager.disconnect(websocket)
 
 @app.post("/process_voice/{faculty_id}")
 async def process_voice(faculty_id: str, file: UploadFile = File(...)):
@@ -51,11 +56,17 @@ async def process_voice(faculty_id: str, file: UploadFile = File(...)):
     text = result["text"].lower().strip()
     os.remove(temp_path)
 
-    response_data = {"type": "BOARD_UPDATE", "content": text, "action": "none"}
+    response_data = {
+        "type": "BOARD_UPDATE", 
+        "content": text, 
+        "action": "none",
+        "gcode": []
+    }
 
     if "table" in text:
         response_data["action"] = "DRAW_TABLE"
         response_data["content"] = "Aether: Drawing physical table..."
+        response_data["gcode"] = get_table_gcode()
     elif "next" in text:
         response_data["action"] = "NEXT_SLIDE"
     elif "highlight" in text:
@@ -69,4 +80,4 @@ async def process_voice(faculty_id: str, file: UploadFile = File(...)):
 @app.get("/generate_summary/{faculty_id}")
 async def generate_summary(faculty_id: str):
     file_path = generate_ppt_file(session_history)
-    return {"status": "Success", "file_url": file_path}
+    return {"status": "Success", "file_url": file_path}s
