@@ -3,6 +3,7 @@ import whisper
 import os
 import asyncio
 import torch
+import numpy as np
 from fastapi import FastAPI, WebSocket, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sentence_transformers import SentenceTransformer, util
@@ -24,8 +25,8 @@ session_history = []
 
 intents = {
     "DRAW_TABLE": ["draw a table", "create a grid", "make a table"],
-    "NEXT_SLIDE": ["next slide", "move forward"],
-    "HIGHLIGHT": ["highlight this", "underline this"]
+    "NEXT_SLIDE": ["next slide", "move forward", "change slide"],
+    "HIGHLIGHT": ["highlight this", "mark this important", "underline this"]
 }
 
 class ConnectionManager:
@@ -83,8 +84,10 @@ async def process_voice(faculty_id: str, file: UploadFile = File(...)):
     }
 
     if detected_action == "DRAW_TABLE":
+        response_data["content"] = "Aether: Drawing physical table..."
         response_data["gcode"] = get_table_gcode()
     elif detected_action == "HIGHLIGHT":
+        response_data["content"] = text.replace("highlight", "").strip()
         response_data["gcode"] = get_highlight_gcode()
     
     session_history.append({"intent": detected_action, "text": text})
