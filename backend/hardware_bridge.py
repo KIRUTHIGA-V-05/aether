@@ -1,5 +1,5 @@
 def get_table_gcode():
-    gcode = [
+    return [
         "G21", 
         "G90",
         "G1 Z5 F500",
@@ -12,9 +12,3 @@ def get_table_gcode():
         "M5",
         "G1 Z5"
     ]
-    return gcode
-
-def simulate_hardware_execution():
-    commands = get_table_gcode()
-    for cmd in commands:
-        print(f"Hardware Logic: {cmd}")
