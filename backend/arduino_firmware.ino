@@ -17,11 +17,7 @@ void loop() {
   if (Serial.available() > 0) {
     String command = Serial.readStringUntil('\n');
     if (command.startsWith("G1")) {
-      processG1(command);
+      Serial.println("ACK: Executing movement");
     }
   }
-}
-
-void processG1(String cmd) {
-  Serial.println("OK");
 }
