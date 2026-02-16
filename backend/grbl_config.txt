@@ -1,0 +1,8 @@
+$100=80.000 (X steps/mm - adjust based on your pulley teeth)
+$101=80.000 (Y steps/mm)
+$32=1 (Laser mode enabled - allows M3/M5 to control servo on D11)
+$1=255 (Keep motors locked so the arm doesn't fall under gravity)
+$22=1 (Homing cycle enabled)
+$23=3 (Homing direction invert)
+$130=300 (X max travel mm)
+$131=300 (Y max travel mm)
