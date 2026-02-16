@@ -31,4 +31,4 @@ def get_highlight_gcode():
 
 def simulate_hardware_execution(commands):
     for cmd in commands:
-        print(f"Aether Hardware Simulation: {cmd}")
+        print(f"Hardware Logic: {cmd}")
